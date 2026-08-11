@@ -1,0 +1,25 @@
+{
+  "name": "derive-option-manager",
+  "version": "1.0.0",
+  "description": "Automated break-even closing for Derive.xyz options",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "reset": "rm -f ~/.derive-option-manager/settings.json && echo 'Settings effacees'"
+  },
+  "dependencies": {
+    "@derivexyz/derive-ts": "^3.0.12",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.0",
+    "ws": "^8.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.15.0",
+    "typescript": "^5.5.0"
+  }
+}

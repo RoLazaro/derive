@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Derive Option Manager</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0e17;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: #111827;
+      border-bottom: 1px solid #1e293b;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header h1 { font-size: 16px; font-weight: 600; color: #22d3ee; }
+
+    .header-right { display: flex; align-items: center; gap: 12px; }
+
+    .status-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; padding: 4px 10px; border-radius: 12px; background: #1e293b;
+    }
+
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+    .status-dot.connected { background: #22c55e; }
+
+    .btn-settings {
+      background: none; border: 1px solid #374151; color: #9ca3af;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      display: flex; align-items: center; gap: 6px; transition: all 0.2s;
+    }
+
+    .btn-settings:hover { border-color: #22d3ee; color: #22d3ee; }
+
+    .main { padding: 24px; }
+
+    /* Spot prices bar */
+    .spot-bar {
+      background: #111827; border-radius: 12px; padding: 16px 20px;
+      margin-bottom: 20px; display: flex; gap: 32px; border: 1px solid #1e293b;
+    }
+
+    .spot-item { display: flex; flex-direction: column; gap: 2px; }
+    .spot-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .spot-price { font-size: 20px; font-weight: 700; color: #f1f5f9; }
+    .spot-price.positive { color: #22c55e; }
+    .spot-price.negative { color: #ef4444; }
+
+    /* Positions table */
+    .positions-card {
+      background: #111827; border-radius: 12px; border: 1px solid #1e293b; overflow: hidden;
+    }
+
+    .positions-header {
+      padding: 16px 20px; border-bottom: 1px solid #1e293b;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .positions-header h2 { font-size: 15px; font-weight: 600; color: #f1f5f9; }
+
+    .positions-count {
+      background: #22d3ee; color: #0f172a; font-size: 11px; font-weight: 700;
+      padding: 2px 8px; border-radius: 10px;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    th {
+      text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 600;
+      color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid #1e293b; background: #0f172a;
+    }
+
+    td {
+      padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #1e293b;
+    }
+
+    tr:hover { background: rgba(34, 211, 238, 0.03); }
+
+    .instrument-name { font-weight: 600; color: #22d3ee; }
+    .type-put { color: #f97316; }
+    .type-call { color: #a78bfa; }
+    .dir-buy { color: #22c55e; }
+    .dir-sell { color: #ef4444; }
+
+    .pnl { font-weight: 600; }
+    .pnl.positive { color: #22c55e; }
+    .pnl.negative { color: #ef4444; }
+
+    .break-even-badge {
+      background: rgba(34, 211, 238, 0.1); color: #22d3ee; padding: 2px 8px;
+      border-radius: 6px; font-size: 11px; font-weight: 600;
+    }
+
+    .status-monitoring { color: #fbbf24; font-size: 11px; }
+    .status-triggered { color: #22c55e; font-size: 11px; font-weight: 600; }
+
+    .empty-state {
+      text-align: center; padding: 60px 20px; color: #475569;
+    }
+
+    .empty-state h3 { font-size: 18px; margin-bottom: 8px; color: #64748b; }
+
+    .loading { color: #22d3ee; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
+      z-index: 100; align-items: center; justify-content: center;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal {
+      background: #1e293b; border-radius: 16px; width: 580px; max-height: 80vh;
+      overflow: hidden; border: 1px solid #334155;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      padding: 20px 24px; border-bottom: 1px solid #334155;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .modal-header h2 { font-size: 18px; font-weight: 600; color: #f1f5f9; }
+
+    .modal-close {
+      background: none; border: none; color: #64748b; cursor: pointer;
+      font-size: 20px; padding: 4px; line-height: 1;
+    }
+
+    .modal-close:hover { color: #ef4444; }
+
+    .modal-body { padding: 24px; overflow-y: auto; max-height: 60vh; }
+
+    .settings-card {
+      background: #0f172a; border-radius: 12px; padding: 20px; border: 1px solid #1e293b;
+    }
+
+    .settings-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+
+    .settings-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, #22d3ee, #0ea5e9);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+
+    .settings-card-header h3 { font-size: 15px; font-weight: 600; color: #f1f5f9; }
+    .settings-card-header p { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+    .status-msg {
+      padding: 10px 14px; border-radius: 8px; margin-bottom: 20px; font-size: 13px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .status-msg.warning { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
+    .status-msg.success { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: #86efac; }
+
+    .form-group { margin-bottom: 16px; }
+
+    .form-group label {
+      display: block; font-size: 13px; font-weight: 500;
+      color: #94a3b8; margin-bottom: 6px;
+    }
+
+    .form-group input, .form-group select {
+      width: 100%; padding: 10px 14px; background: #0f172a;
+      border: 1px solid #334155; border-radius: 8px; color: #e2e8f0;
+      font-size: 14px; font-family: 'SF Mono', 'Fira Code', monospace;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus { outline: none; border-color: #22d3ee; }
+    .form-group input::placeholder { color: #475569; }
+    .form-hint { font-size: 11px; color: #64748b; margin-top: 4px; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .password-wrapper { position: relative; }
+    .password-wrapper input { padding-right: 40px; }
+
+    .password-toggle {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: #64748b; cursor: pointer; font-size: 16px;
+    }
+
+    .password-toggle:hover { color: #22d3ee; }
+
+    .network-selector { display: flex; gap: 8px; margin-bottom: 16px; }
+
+    .network-btn {
+      flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: #94a3b8; cursor: pointer; font-size: 13px;
+      font-weight: 500; text-align: center; transition: all 0.2s;
+    }
+
+    .network-btn.active { border-color: #22d3ee; color: #22d3ee; background: rgba(34,211,238,0.1); }
+    .network-btn:hover:not(.active) { border-color: #475569; }
+
+    .modal-footer {
+      padding: 16px 24px; border-top: 1px solid #334155;
+      display: flex; justify-content: flex-end; gap: 10px;
+    }
+
+    .btn {
+      padding: 10px 20px; border-radius: 8px; font-size: 14px;
+      font-weight: 500; cursor: pointer; border: none; transition: all 0.2s;
+    }
+
+    .btn-primary { background: linear-gradient(135deg, #22d3ee, #0ea5e9); color: #0f172a; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-secondary { background: #334155; color: #e2e8f0; }
+    .btn-secondary:hover { background: #475569; }
+
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; background: #22c55e;
+      color: #0f172a; padding: 12px 20px; border-radius: 8px; font-size: 14px;
+      font-weight: 500; transform: translateY(100px); opacity: 0;
+      transition: all 0.3s; z-index: 200;
+    }
+
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.error { background: #ef4444; color: white; }
+
+    /* Stop Panels */
+    .stop-panels {
+      display: flex; gap: 12px; margin-bottom: 20px; align-items: stretch;
+    }
+
+    .stop-panel {
+      background: #111827; border-radius: 12px; padding: 16px 20px;
+      border: 1px solid #1e293b; flex: 1;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .stop-panel.active {
+      border-color: #ef4444;
+      background: rgba(239, 68, 68, 0.05);
+    }
+
+    .stop-panel-left { display: flex; align-items: center; gap: 12px; }
+
+    .stop-icon {
+      width: 40px; height: 40px; background: rgba(251, 191, 36, 0.15);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-size: 20px; color: #fbbf24;
+    }
+
+    .stop-panel.active .stop-icon { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+
+    .stop-label { font-size: 14px; font-weight: 600; color: #f1f5f9; }
+    .stop-hint { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+    .stop-panel-right { display: flex; align-items: center; gap: 12px; }
+
+    .stop-input-group {
+      display: flex; align-items: center; background: #0f172a;
+      border: 1px solid #334155; border-radius: 8px; padding: 0 12px;
+    }
+
+    .stop-input-group:focus-within { border-color: #ef4444; }
+
+    .stop-currency { color: #64748b; font-size: 14px; font-weight: 600; }
+
+    .stop-input-group input {
+      background: none; border: none; color: #e2e8f0; padding: 10px 8px;
+      font-size: 14px; font-family: 'SF Mono', monospace; width: 120px;
+      outline: none;
+    }
+
+    .stop-input-group input::placeholder { color: #475569; }
+
+    .btn-stop {
+      padding: 10px 20px; border-radius: 8px; font-size: 13px;
+      font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;
+      background: #374151; color: #9ca3af;
+    }
+
+    .btn-stop:hover { background: #4b5563; color: #e2e8f0; }
+
+    .btn-stop.armed {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white; animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+
+    .stop-status {
+      font-size: 11px; color: #64748b; min-width: 60px; text-align: right;
+    }
+
+    .stop-status.active { color: #ef4444; font-weight: 600; }
+
+    /* Emergency Button */
+    .btn-emergency {
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      color: white; border: 2px solid #ef4444; border-radius: 12px;
+      padding: 16px 28px; cursor: pointer; font-size: 15px;
+      font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+      display: flex; align-items: center; gap: 10px;
+      transition: all 0.2s; white-space: nowrap;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-emergency:hover {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      box-shadow: 0 0 30px rgba(239, 68, 68, 0.5);
+      transform: scale(1.02);
+    }
+
+    .btn-emergency:active {
+      transform: scale(0.98);
+    }
+
+    .btn-emergency.processing {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    /* Payoff Chart */
+    .payoff-section {
+      background: #111827; border-radius: 12px; border: 1px solid #1e293b;
+      margin-bottom: 20px; overflow: hidden;
+    }
+
+    .payoff-tabs {
+      display: flex; border-bottom: 1px solid #1e293b; background: #0f172a;
+    }
+
+    .payoff-tab {
+      padding: 12px 20px; font-size: 13px; font-weight: 600; color: #64748b;
+      cursor: pointer; border: none; background: none; transition: all 0.2s;
+      border-bottom: 2px solid transparent;
+    }
+
+    .payoff-tab:hover { color: #94a3b8; }
+    .payoff-tab.active { color: #22d3ee; border-bottom-color: #22d3ee; }
+
+    .payoff-content { padding: 20px; }
+
+    .payoff-stats {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .payoff-stat {
+      text-align: center; padding: 12px; background: #0f172a;
+      border-radius: 8px; border: 1px solid #1e293b;
+    }
+
+    .payoff-stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .payoff-stat-value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+    .payoff-stat-value.loss { color: #ef4444; }
+    .payoff-stat-value.breakeven { color: #f1f5f9; }
+    .payoff-stat-value.profit { color: #22c55e; }
+
+    .chart-container {
+      position: relative; width: 100%; height: 280px;
+      background: #0f172a; border-radius: 8px; border: 1px solid #1e293b;
+    }
+
+    .chart-container canvas {
+      width: 100%; height: 100%;
+    }
+
+    .chart-price-marker {
+      position: absolute; top: 0; bottom: 0; width: 2px;
+      background: #f1f5f9; pointer-events: none;
+    }
+
+    .chart-price-label {
+      position: absolute; top: -20px; transform: translateX(-50%);
+      background: #f1f5f9; color: #0f172a; padding: 2px 8px;
+      border-radius: 4px; font-size: 11px; font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .chart-zero-line {
+      position: absolute; left: 0; right: 0; height: 1px;
+      background: #334155; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Derive Option Manager</h1>
+    <div class="header-right">
+      <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Non connecte</span>
+      </div>
+      <button class="btn-settings" onclick="openSettings()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+        Reglages
+      </button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="spot-bar" id="spotBar">
+      <div class="spot-item">
+        <span class="spot-label">ETH Spot</span>
+        <span class="spot-price" id="ethPrice">--</span>
+      </div>
+    </div>
+
+    <!-- Payoff Chart -->
+    <div class="payoff-section" id="payoffSection" style="display:none">
+      <div class="payoff-tabs">
+        <button class="payoff-tab active" onclick="setPayoffTab('payoff')">Payoff</button>
+        <button class="payoff-tab" onclick="setPayoffTab('greeks')">Greeks</button>
+        <button class="payoff-tab" onclick="setPayoffTab('trades')">Trades</button>
+        <button class="payoff-tab" onclick="setPayoffTab('book')">Book</button>
+      </div>
+      <div class="payoff-content">
+        <div class="payoff-stats">
+          <div class="payoff-stat">
+            <div class="payoff-stat-label">Max Loss</div>
+            <div class="payoff-stat-value loss" id="payoffMaxLoss">--</div>
+          </div>
+          <div class="payoff-stat">
+            <div class="payoff-stat-label">Break Even</div>
+            <div class="payoff-stat-value breakeven" id="payoffBreakEven">--</div>
+          </div>
+          <div class="payoff-stat">
+            <div class="payoff-stat-label">Max Profit</div>
+            <div class="payoff-stat-value profit" id="payoffMaxProfit">--</div>
+          </div>
+        </div>
+        <div class="chart-container" id="chartContainer">
+          <canvas id="payoffCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stop Global + Emergency Panel -->
+    <div class="stop-panels">
+      <div class="stop-panel" id="stopPanel">
+        <div class="stop-panel-left">
+          <div class="stop-icon">&#9888;</div>
+          <div>
+            <div class="stop-label">Stop Global</div>
+            <div class="stop-hint">Ferme tout si ETH atteint ce prix</div>
+          </div>
+        </div>
+        <div class="stop-panel-right">
+          <div class="stop-input-group">
+            <span class="stop-currency">$</span>
+            <input type="number" id="globalStopPrice" placeholder="Ex: 1800" step="1" min="0">
+          </div>
+          <button class="btn-stop" id="btnStop" onclick="toggleGlobalStop()">Activer</button>
+          <div class="stop-status" id="stopStatus">Inactif</div>
+        </div>
+      </div>
+
+      <button class="btn-emergency" id="btnEmergency" onclick="emergencyClose()">
+        <span class="emergency-icon">&#9888;</span>
+        STOP URGENCE
+      </button>
+    </div>
+
+    <div class="positions-card">
+      <div class="positions-header">
+        <h2>Positions</h2>
+        <span class="positions-count" id="posCount">0</span>
+      </div>
+      <div id="positionsTable"></div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Configuration API</h2>
+        <button class="modal-close" onclick="closeSettings()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="settings-icon">&#128273;</div>
+            <div>
+              <h3>Gestion des cles API Derive</h3>
+              <p>Configure tes identifiants de session Derive.</p>
+            </div>
+          </div>
+
+          <div class="status-msg warning" id="configStatus">
+            <span>&#9679;</span>
+            <span id="configStatusText">Aucune cle configuree.</span>
+          </div>
+
+          <label style="font-size:13px;color:#94a3b8;margin-bottom:8px;display:block">Reseau</label>
+          <div class="network-selector">
+            <button class="network-btn active" id="netMainnet" onclick="setNetwork('mainnet')">Mainnet</button>
+            <button class="network-btn" id="netTestnet" onclick="setNetwork('testnet')">Testnet</button>
+          </div>
+
+          <div class="form-group">
+            <label>Adresse de la Session Key (publique)</label>
+            <input type="text" id="sessionKey" placeholder="Ex: 0xaE739CD587D05C1379E3405BE3bD0A3Bc5c009FE">
+            <div class="form-hint">Creee sur https://app.derive.xyz/developers</div>
+          </div>
+
+          <div class="form-group">
+            <label>Cle privee de la Session Key</label>
+            <div class="password-wrapper">
+              <input type="password" id="sessionSecret" placeholder="0x...">
+              <button class="password-toggle" onclick="toggleSecret()">&#128065;</button>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Subaccount ID</label>
+              <input type="number" id="subaccountId" value="0" min="0">
+            </div>
+            <div class="form-group">
+              <label>Break-even offset %</label>
+              <input type="number" id="breakEvenOffset" value="0.5" min="0" max="10" step="0.1">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeSettings()">Annuler</button>
+        <button class="btn btn-primary" onclick="saveSettingsConfig()">Sauvegarder</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let currentNetwork = 'mainnet';
+    let pollTimer = null;
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        document.getElementById('sessionKey').value = data.sessionKey || '';
+        document.getElementById('subaccountId').value = data.subaccountId || 0;
+        document.getElementById('breakEvenOffset').value = data.breakEvenOffsetPct || 0.5;
+        if (data.wsUrl && data.wsUrl.includes('demo')) setNetwork('testnet');
+        updateStatus(data.configured);
+      } catch (err) { console.error(err); }
+    }
+
+    function updateStatus(configured) {
+      document.getElementById('statusDot').classList.toggle('connected', configured);
+      document.getElementById('statusText').textContent = configured ? 'Configure' : 'Non connecte';
+      const cs = document.getElementById('configStatus');
+      const cst = document.getElementById('configStatusText');
+      if (configured) {
+        cs.className = 'status-msg success';
+        cst.textContent = 'Cle API configuree.';
+      } else {
+        cs.className = 'status-msg warning';
+        cst.textContent = 'Aucune cle configuree.';
+      }
+    }
+
+    async function fetchPositions() {
+      try {
+        const res = await fetch('/api/positions');
+        const data = await res.json();
+        renderPositions(data.positions || [], data.spotPrices || {});
+      } catch (err) { console.error(err); }
+    }
+
+    function renderPositions(positions, spotPrices) {
+      // Extract ETH spot from position index_price if not in spotPrices
+      let ethSpot = spotPrices.ETH;
+      if (!ethSpot && positions.length > 0) {
+        const idx = positions.find(p => p.index_price);
+        if (idx) ethSpot = parseFloat(idx.index_price);
+      }
+
+      // Update spot prices display
+      if (ethSpot) {
+        document.getElementById('ethPrice').textContent = '$' + ethSpot.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+      }
+
+      document.getElementById('posCount').textContent = positions.length;
+
+      if (positions.length === 0) {
+        document.getElementById('positionsTable').innerHTML =
+          '<div class="empty-state"><h3>Aucune position ouverte</h3><p>Ouvre des options sur Derive pour les voir ici</p></div>';
+        return;
+      }
+
+      let html = '<table><thead><tr>';
+      html += '<th>Instrument</th><th>Type</th><th>Direction</th><th>Montant</th>';
+      html += '<th>Strike</th><th>Entree</th><th>Mark</th><th>P&L</th><th>Break-even</th>';
+      html += '</tr></thead><tbody>';
+
+      for (const pos of positions) {
+        const name = pos.instrument_name || '';
+        const parts = name.split('-');
+        const optType = parts[3] === 'P' ? 'PUT' : 'CALL';
+        const strike = parts[2] || '--';
+        const typeClass = optType === 'PUT' ? 'type-put' : 'type-call';
+
+        // Direction: positive amount = long (buy), negative = short (sell)
+        const rawAmount = parseFloat(pos.amount || '0');
+        const isShort = rawAmount < 0;
+        const amount = Math.abs(rawAmount);
+        const direction = isShort ? 'SELL' : 'BUY';
+        const dirClass = isShort ? 'dir-sell' : 'dir-buy';
+
+        // Prices
+        const entry = parseFloat(pos.average_price || '0');
+        const mark = parseFloat(pos.mark_price || '0');
+        const strikeNum = parseFloat(strike);
+
+        // P&L from Derive (already calculated)
+        const pnl = parseFloat(pos.unrealized_pnl || '0');
+        const pnlClass = pnl >= 0 ? 'positive' : 'negative';
+
+        // Break-even calculation
+        let be = '--';
+        if (entry && strikeNum) {
+          if (isShort) {
+            // Short put: BE = strike - premium, Short call: BE = strike + premium
+            be = optType === 'PUT' ? (strikeNum - entry).toFixed(2) : (strikeNum + entry).toFixed(2);
+          } else {
+            // Long put: BE = strike - premium, Long call: BE = strike + premium
+            be = optType === 'PUT' ? (strikeNum - entry).toFixed(2) : (strikeNum + entry).toFixed(2);
+          }
+        }
+
+        html += '<tr>';
+        html += '<td class="instrument-name">' + name + '</td>';
+        html += '<td class="' + typeClass + '">' + optType + '</td>';
+        html += '<td class="' + dirClass + '">' + direction + '</td>';
+        html += '<td>' + amount + '</td>';
+        html += '<td>$' + strike + '</td>';
+        html += '<td>$' + entry.toFixed(2) + '</td>';
+        html += '<td>$' + mark.toFixed(2) + '</td>';
+        html += '<td class="pnl ' + pnlClass + '">' + (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2) + '</td>';
+        html += '<td><span class="break-even-badge">$' + be + '</span></td>';
+        html += '</tr>';
+      }
+
+      html += '</tbody></table>';
+      document.getElementById('positionsTable').innerHTML = html;
+
+      // Update payoff chart
+      renderPayoffChart(positions, spotPrices);
+    }
+
+    function setNetwork(net) {
+      currentNetwork = net;
+      document.getElementById('netMainnet').classList.toggle('active', net === 'mainnet');
+      document.getElementById('netTestnet').classList.toggle('active', net === 'testnet');
+    }
+
+    function openSettings() { document.getElementById('settingsModal').classList.add('active'); }
+    function closeSettings() { document.getElementById('settingsModal').classList.remove('active'); }
+    function toggleSecret() {
+      const i = document.getElementById('sessionSecret');
+      i.type = i.type === 'password' ? 'text' : 'password';
+    }
+
+    async function saveSettingsConfig() {
+      const sessionKey = document.getElementById('sessionKey').value.trim();
+      const sessionSecret = document.getElementById('sessionSecret').value.trim();
+      const subaccountId = parseInt(document.getElementById('subaccountId').value) || 0;
+      const breakEvenOffsetPct = parseFloat(document.getElementById('breakEvenOffset').value) || 0.5;
+
+      if (!sessionKey || !sessionSecret) { showToast('Remplis les cles API', true); return; }
+
+      const wsUrl = currentNetwork === 'testnet'
+        ? 'wss://api-demo.lyra.finance/ws' : 'wss://api.lyra.finance/ws';
+      const restUrl = currentNetwork === 'testnet'
+        ? 'https://api-demo.lyra.finance' : 'https://api.lyra.finance';
+
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionKey, sessionSecret, subaccountId, breakEvenOffsetPct, wsUrl, restUrl }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          updateStatus(true);
+          closeSettings();
+          showToast('Configuration sauvegardee !');
+          // Start polling positions
+          startPolling();
+        } else {
+          showToast('Erreur: ' + data.error, true);
+        }
+      } catch (err) { showToast('Erreur de connexion', true); }
+    }
+
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show' + (isError ? ' error' : '');
+      setTimeout(() => t.className = 'toast', 3000);
+    }
+
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      fetchPositions();
+      pollTimer = setInterval(fetchPositions, 5000);
+    }
+
+    // --- Stop Global ---
+    let stopArmed = false;
+
+    async function loadStopSettings() {
+      try {
+        const res = await fetch('/api/stop');
+        const data = await res.json();
+        if (data.price) {
+          document.getElementById('globalStopPrice').value = data.price;
+          if (data.armed) {
+            stopArmed = true;
+            updateStopUI(true, data.price);
+          }
+        }
+      } catch (e) {}
+    }
+
+    function updateStopUI(active, price) {
+      const panel = document.getElementById('stopPanel');
+      const btn = document.getElementById('btnStop');
+      const status = document.getElementById('stopStatus');
+
+      panel.classList.toggle('active', active);
+
+      if (active) {
+        btn.textContent = 'Desactiver';
+        btn.classList.add('armed');
+        status.textContent = 'Arme a $' + Number(price).toLocaleString();
+        status.classList.add('active');
+      } else {
+        btn.textContent = 'Activer';
+        btn.classList.remove('armed');
+        status.textContent = 'Inactif';
+        status.classList.remove('active');
+      }
+    }
+
+    async function toggleGlobalStop() {
+      const priceInput = document.getElementById('globalStopPrice');
+      const price = parseFloat(priceInput.value);
+
+      if (stopArmed) {
+        // Desactiver
+        stopArmed = false;
+        updateStopUI(false);
+        await fetch('/api/stop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ armed: false }),
+        });
+        showToast('Stop global desactive');
+        return;
+      }
+
+      if (!price || price <= 0) {
+        showToast('Entrez un prix de stop valide', true);
+        return;
+      }
+
+      // Activer
+      stopArmed = true;
+      updateStopUI(true, price);
+
+      const res = await fetch('/api/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ armed: true, price }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        showToast('Stop active a $' + price.toLocaleString());
+      } else {
+        showToast('Erreur: ' + data.error, true);
+        stopArmed = false;
+        updateStopUI(false);
+      }
+    }
+
+    // --- Emergency Close ---
+    async function emergencyClose() {
+      if (!confirm('FERMER TOUTES LES POSITIONS MAINTENANT ?')) return;
+
+      const btn = document.getElementById('btnEmergency');
+      btn.classList.add('processing');
+      btn.textContent = 'FERMETURE EN COURS...';
+
+      try {
+        const res = await fetch('/api/emergency-close', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(data.message || 'Toutes les positions ont ete fermees');
+        } else {
+          showToast('Erreur: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Erreur de connexion', true);
+      } finally {
+        btn.classList.remove('processing');
+        btn.innerHTML = '<span class="emergency-icon">&#9888;</span> STOP URGENCE';
+      }
+    }
+
+    document.getElementById('settingsModal').addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay')) closeSettings();
+    });
+
+    // Init
+    loadSettings().then(() => {
+      startPolling();
+      loadStopSettings();
+      initPayoffChart();
+    });
+
+    // --- Payoff Chart ---
+    let currentPayoffTab = 'payoff';
+
+    function setPayoffTab(tab) {
+      currentPayoffTab = tab;
+      document.querySelectorAll('.payoff-tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.payoff-tab[onclick="setPayoffTab('${tab}')"]`).classList.add('active');
+      renderPayoffChart(lastPositions || [], lastSpotPrices || {});
+    }
+
+    let lastPositions = [];
+    let lastSpotPrices = {};
+
+    function calculatePayoff(positions, ethPrice) {
+      let totalPnl = 0;
+      for (const pos of positions) {
+        const name = pos.instrument_name || '';
+        const parts = name.split('-');
+        const strike = parseFloat(parts[2] || '0');
+        const optType = parts[3] === 'P' ? 'put' : 'call';
+        const rawAmount = parseFloat(pos.amount || '0');
+        const isShort = rawAmount < 0;
+        const amount = Math.abs(rawAmount);
+        const entry = parseFloat(pos.average_price || '0');
+
+        let intrinsic = 0;
+        if (optType === 'call') {
+          intrinsic = Math.max(0, ethPrice - strike);
+        } else {
+          intrinsic = Math.max(0, strike - ethPrice);
+        }
+
+        if (isShort) {
+          totalPnl += amount * (entry - intrinsic);
+        } else {
+          totalPnl += amount * (intrinsic - entry);
+        }
+      }
+      return totalPnl;
+    }
+
+    function calculateMaxLoss(positions) {
+      let maxLoss = 0;
+      for (const pos of positions) {
+        const name = pos.instrument_name || '';
+        const parts = name.split('-');
+        const strike = parseFloat(parts[2] || '0');
+        const optType = parts[3] === 'P' ? 'put' : 'call';
+        const rawAmount = parseFloat(pos.amount || '0');
+        const isShort = rawAmount < 0;
+        const amount = Math.abs(rawAmount);
+        const entry = parseFloat(pos.average_price || '0');
+
+        if (isShort && optType === 'call') {
+          maxLoss += amount * (entry);
+        } else if (!isShort && optType === 'put') {
+          maxLoss += amount * entry;
+        } else if (isShort && optType === 'put') {
+          maxLoss += amount * (entry - strike);
+        }
+      }
+      return maxLoss;
+    }
+
+    function calculateMaxProfit(positions) {
+      let maxProfit = 0;
+      for (const pos of positions) {
+        const name = pos.instrument_name || '';
+        const parts = name.split('-');
+        const strike = parseFloat(parts[2] || '0');
+        const optType = parts[3] === 'P' ? 'put' : 'call';
+        const rawAmount = parseFloat(pos.amount || '0');
+        const isShort = rawAmount < 0;
+        const amount = Math.abs(rawAmount);
+        const entry = parseFloat(pos.average_price || '0');
+
+        if (!isShort && optType === 'call') {
+          maxProfit += amount * (entry);
+        } else if (isShort && optType === 'put') {
+          maxProfit += amount * (strike - entry);
+        } else if (!isShort && optType === 'put') {
+          maxProfit += amount * (strike - entry);
+        }
+      }
+      return maxProfit;
+    }
+
+    function findBreakEven(positions) {
+      let minPnl = Infinity;
+      let bePrice = 0;
+      const step = 1;
+      const minStrike = Math.min(...positions.map(p => parseFloat(p.instrument_name.split('-')[2] || '0')));
+      const maxStrike = Math.max(...positions.map(p => parseFloat(p.instrument_name.split('-')[2] || '0')));
+      const start = Math.max(0, minStrike - 500);
+      const end = maxStrike + 500;
+
+      for (let price = start; price <= end; price += step) {
+        const pnl = calculatePayoff(positions, price);
+        if (Math.abs(pnl) < Math.abs(minPnl)) {
+          minPnl = pnl;
+          bePrice = price;
+        }
+      }
+      return bePrice;
+    }
+
+    function initPayoffChart() {
+      const canvas = document.getElementById('payoffCanvas');
+      const container = document.getElementById('chartContainer');
+      canvas.width = container.offsetWidth * 2;
+      canvas.height = container.offsetHeight * 2;
+      canvas.style.width = container.offsetWidth + 'px';
+      canvas.style.height = container.offsetHeight + 'px';
+
+      window.addEventListener('resize', () => {
+        canvas.width = container.offsetWidth * 2;
+        canvas.height = container.offsetHeight * 2;
+        canvas.style.width = container.offsetWidth + 'px';
+        canvas.style.height = container.offsetHeight + 'px';
+        renderPayoffChart(lastPositions, lastSpotPrices);
+      });
+    }
+
+    function renderPayoffChart(positions, spotPrices) {
+      lastPositions = positions;
+      lastSpotPrices = spotPrices;
+
+      if (positions.length === 0) {
+        document.getElementById('payoffSection').style.display = 'none';
+        return;
+      }
+      document.getElementById('payoffSection').style.display = 'block';
+
+      // Re-init canvas size now that section is visible
+      const canvas = document.getElementById('payoffCanvas');
+      const container = document.getElementById('chartContainer');
+      const dpr = 2;
+      canvas.width = container.offsetWidth * dpr;
+      canvas.height = container.offsetHeight * dpr;
+      canvas.style.width = container.offsetWidth + 'px';
+      canvas.style.height = container.offsetHeight + 'px';
+
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx.clearRect(0, 0, w, h);
+
+      const padding = { top: 30 * dpr, right: 20 * dpr, bottom: 40 * dpr, left: 60 * dpr };
+      const chartW = w - padding.left - padding.right;
+      const chartH = h - padding.top - padding.bottom;
+
+      // Calculate price range
+      const strikes = positions.map(p => parseFloat(p.instrument_name.split('-')[2] || '0'));
+      const minStrike = Math.min(...strikes);
+      const maxStrike = Math.max(...strikes);
+      const rangeStart = Math.max(0, minStrike - 400);
+      const rangeEnd = maxStrike + 400;
+      const priceStep = (rangeEnd - rangeStart) / 200;
+
+      // Calculate PnL for each price
+      const data = [];
+      let minPnl = 0, maxPnl = 0;
+      for (let price = rangeStart; price <= rangeEnd; price += priceStep) {
+        const pnl = calculatePayoff(positions, price);
+        data.push({ price, pnl });
+        if (pnl < minPnl) minPnl = pnl;
+        if (pnl > maxPnl) maxPnl = pnl;
+      }
+
+      const pnlRange = Math.max(Math.abs(minPnl), Math.abs(maxPnl)) * 1.2 || 100;
+
+      // Helper functions
+      const xForPrice = (price) => padding.left + ((price - rangeStart) / (rangeEnd - rangeStart)) * chartW;
+      const yForPnl = (pnl) => padding.top + chartH / 2 - (pnl / pnlRange) * (chartH / 2);
+
+      // Draw zero line
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, yForPnl(0));
+      ctx.lineTo(w - padding.right, yForPnl(0));
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw grid lines
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const x = padding.left + (i / 4) * chartW;
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, h - padding.bottom);
+        ctx.stroke();
+
+        const price = rangeStart + (i / 4) * (rangeEnd - rangeStart);
+        ctx.fillStyle = '#64748b';
+        ctx.font = `${10 * dpr}px SF Mono, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText('$' + Math.round(price), x, h - padding.bottom + 15 * dpr);
+      }
+
+      // Draw payoff line with gradient fill
+      ctx.beginPath();
+      ctx.moveTo(xForPrice(data[0].price), yForPnl(data[0].pnl));
+      for (let i = 1; i < data.length; i++) {
+        ctx.lineTo(xForPrice(data[i].price), yForPnl(data[i].pnl));
+      }
+      ctx.lineTo(xForPrice(data[data.length - 1].price), yForPnl(0));
+      ctx.lineTo(xForPrice(data[0].price), yForPnl(0));
+      ctx.closePath();
+
+      const gradient = ctx.createLinearGradient(0, yForPnl(maxPnl), 0, yForPnl(minPnl));
+      gradient.addColorStop(0, 'rgba(34, 197, 94, 0.2)');
+      gradient.addColorStop(0.5, 'rgba(34, 197, 94, 0.05)');
+      gradient.addColorStop(0.5, 'rgba(239, 68, 68, 0.05)');
+      gradient.addColorStop(1, 'rgba(239, 68, 68, 0.2)');
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      // Draw payoff line
+      ctx.beginPath();
+      ctx.moveTo(xForPrice(data[0].price), yForPnl(data[0].pnl));
+      for (let i = 1; i < data.length; i++) {
+        ctx.lineTo(xForPrice(data[i].price), yForPnl(data[i].pnl));
+      }
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 2 * dpr;
+      ctx.stroke();
+
+      // Draw current ETH price marker
+      let ethSpot = spotPrices.ETH;
+      if (!ethSpot && positions.length > 0) {
+        const idx = positions.find(p => p.index_price);
+        if (idx) ethSpot = parseFloat(idx.index_price);
+      }
+
+      if (ethSpot && ethSpot >= rangeStart && ethSpot <= rangeEnd) {
+        const x = xForPrice(ethSpot);
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.setLineDash([6, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, h - padding.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#f1f5f9';
+        ctx.font = `bold ${11 * dpr}px SF Mono, monospace`;
+        ctx.textAlign = 'center';
+        ctx.fillText('ETH $' + ethSpot.toLocaleString(), x, padding.top - 8 * dpr);
+      }
+
+      // Update stats
+      const maxLoss = calculateMaxLoss(positions);
+      const maxProfit = calculateMaxProfit(positions);
+      const be = findBreakEven(positions);
+
+      document.getElementById('payoffMaxLoss').textContent = '$' + maxLoss.toFixed(2);
+      document.getElementById('payoffBreakEven').textContent = '$' + be.toFixed(0);
+      document.getElementById('payoffMaxProfit').textContent = '$' + maxProfit.toFixed(2);
+    }
+  </script>
+</body>
+</html>
