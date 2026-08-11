@@ -899,8 +899,6 @@
         const strike = parseFloat(parts[2] || '0');
         const optType = parts[3] === 'P' ? 'put' : 'call';
         const rawAmount = parseFloat(pos.amount || '0');
-        const isShort = rawAmount < 0;
-        const amount = Math.abs(rawAmount);
         const entry = parseFloat(pos.average_price || '0');
 
         let intrinsic = 0;
@@ -910,48 +908,84 @@
           intrinsic = Math.max(0, strike - ethPrice);
         }
 
-        if (isShort) {
-          totalPnl += amount * (entry - intrinsic);
-        } else {
-          totalPnl += amount * (intrinsic - entry);
-        }
+        // rawAmount est negatif pour un short : PnL = amount * (intrinsic - entry)
+        // fonctionne pour long ET short (signe naturel de la position)
+        totalPnl += rawAmount * (intrinsic - entry);
       }
       return totalPnl;
     }
 
+    // Points ou le PnL change de pente : chaque strike + bornes
+    function getPayoffKinks(positions) {
+      const kinks = new Set([0]);
+      for (const pos of positions) {
+        const parts = (pos.instrument_name || '').split('-');
+        kinks.add(parseFloat(parts[2] || '0'));
+      }
+      return Array.from(kinks).sort((a, b) => a - b);
+    }
+
+    // Pente asymptotique a l'infini : somme des rawAmount des calls (puts -> 0)
+    function getAsymptoticSlope(positions) {
+      let slope = 0;
+      for (const pos of positions) {
+        const parts = (pos.instrument_name || '').split('-');
+        const optType = parts[3] === 'P' ? 'put' : 'call';
+        if (optType === 'call') slope += parseFloat(pos.amount || '0');
+      }
+      return slope;
+    }
+
     function calculateMaxLoss(positions) {
       if (positions.length === 0) return 0;
-      const highPrice = 100000;
-      const pnlLow = calculatePayoff(positions, 0);
-      const pnlHigh = calculatePayoff(positions, highPrice);
-      return Math.abs(Math.min(pnlLow, pnlHigh));
+      // Perte illimitee si pente negative a l'infini (net short calls)
+      if (getAsymptoticSlope(positions) < 0) return Infinity;
+      const kinks = getPayoffKinks(positions);
+      let minPnl = Infinity;
+      for (const k of kinks) minPnl = Math.min(minPnl, calculatePayoff(positions, k));
+      // Extremite lointaine (tous les calls ITM, puts OTM) : pente asymptotique
+      const far = (kinks[kinks.length - 1] || 0) + 100000;
+      minPnl = Math.min(minPnl, calculatePayoff(positions, far));
+      return Math.abs(Math.min(minPnl, 0));
     }
 
     function calculateMaxProfit(positions) {
       if (positions.length === 0) return 0;
-      const highPrice = 100000;
-      const pnlLow = calculatePayoff(positions, 0);
-      const pnlHigh = calculatePayoff(positions, highPrice);
-      return Math.max(pnlLow, pnlHigh);
+      // Profit illimite si pente positive a l'infini (net long calls)
+      if (getAsymptoticSlope(positions) > 0) return Infinity;
+      const kinks = getPayoffKinks(positions);
+      let maxPnl = -Infinity;
+      for (const k of kinks) maxPnl = Math.max(maxPnl, calculatePayoff(positions, k));
+      const far = (kinks[kinks.length - 1] || 0) + 100000;
+      maxPnl = Math.max(maxPnl, calculatePayoff(positions, far));
+      return Math.max(maxPnl, 0);
     }
 
     function findBreakEven(positions) {
-      let minPnl = Infinity;
-      let bePrice = 0;
-      const step = 1;
-      const minStrike = Math.min(...positions.map(p => parseFloat(p.instrument_name.split('-')[2] || '0')));
-      const maxStrike = Math.max(...positions.map(p => parseFloat(p.instrument_name.split('-')[2] || '0')));
-      const start = Math.max(0, minStrike - 500);
-      const end = maxStrike + 500;
+      if (positions.length === 0) return null;
+      const kinks = getPayoffKinks(positions);
+      const points = [0, ...kinks.filter(k => k > 0), kinks[kinks.length - 1] + 100000];
+      const breakEvens = [];
 
-      for (let price = start; price <= end; price += step) {
-        const pnl = calculatePayoff(positions, price);
-        if (Math.abs(pnl) < Math.abs(minPnl)) {
-          minPnl = pnl;
-          bePrice = price;
+      for (let i = 0; i < points.length - 1; i++) {
+        const p0 = points[i];
+        const p1 = points[i + 1];
+        const pnl0 = calculatePayoff(positions, p0);
+        const pnl1 = calculatePayoff(positions, p1);
+
+        // Changement de signe (ou zero exact) entre deux points adjacents
+        if (pnl0 === 0) {
+          if (!breakEvens.includes(p0)) breakEvens.push(p0);
+        }
+        if (pnl0 === 0 && pnl1 === 0) continue;
+        if ((pnl0 < 0 && pnl1 > 0) || (pnl0 > 0 && pnl1 < 0)) {
+          // Fonction lineaire par morceaux : racine exacte par interpolation
+          const t = pnl0 / (pnl0 - pnl1);
+          const root = p0 + t * (p1 - p0);
+          if (!breakEvens.some(be => Math.abs(be - root) < 0.01)) breakEvens.push(root);
         }
       }
-      return bePrice;
+      return breakEvens;
     }
 
     function initPayoffChart() {
@@ -1110,11 +1144,13 @@
       // Update stats
       const maxLoss = calculateMaxLoss(positions);
       const maxProfit = calculateMaxProfit(positions);
-      const be = findBreakEven(positions);
+      const breakEvens = findBreakEven(positions);
 
-      document.getElementById('payoffMaxLoss').textContent = '$' + maxLoss.toFixed(2);
-      document.getElementById('payoffBreakEven').textContent = '$' + be.toFixed(0);
-      document.getElementById('payoffMaxProfit').textContent = '$' + maxProfit.toFixed(2);
+      document.getElementById('payoffMaxLoss').textContent = '$' + (maxLoss === Infinity ? '\u221E' : maxLoss.toFixed(2));
+      document.getElementById('payoffBreakEven').textContent = breakEvens && breakEvens.length > 0
+        ? breakEvens.map(be => '$' + be.toFixed(0)).join(' / ')
+        : '--';
+      document.getElementById('payoffMaxProfit').textContent = '$' + (maxProfit === Infinity ? '\u221E' : maxProfit.toFixed(2));
     }
   </script>
 </body>
