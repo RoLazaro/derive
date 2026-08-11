@@ -1057,22 +1057,26 @@
       ctx.closePath();
 
       const gradient = ctx.createLinearGradient(0, yForPnl(maxPnl), 0, yForPnl(minPnl));
-      gradient.addColorStop(0, 'rgba(34, 197, 94, 0.2)');
-      gradient.addColorStop(0.5, 'rgba(34, 197, 94, 0.05)');
-      gradient.addColorStop(0.5, 'rgba(239, 68, 68, 0.05)');
-      gradient.addColorStop(1, 'rgba(239, 68, 68, 0.2)');
+      gradient.addColorStop(0, 'rgba(34, 197, 94, 0.15)');
+      gradient.addColorStop(0.49, 'rgba(34, 197, 94, 0.03)');
+      gradient.addColorStop(0.5, 'rgba(239, 68, 68, 0.03)');
+      gradient.addColorStop(1, 'rgba(239, 68, 68, 0.15)');
       ctx.fillStyle = gradient;
       ctx.fill();
 
-      // Draw payoff line
-      ctx.beginPath();
-      ctx.moveTo(xForPrice(data[0].price), yForPnl(data[0].pnl));
+      // Draw payoff line - green when profit, red when loss
+      ctx.lineWidth = 2.5 * dpr;
       for (let i = 1; i < data.length; i++) {
+        const prevPnl = data[i - 1].pnl;
+        const curPnl = data[i].pnl;
+        const avgPnl = (prevPnl + curPnl) / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(xForPrice(data[i - 1].price), yForPnl(data[i - 1].pnl));
         ctx.lineTo(xForPrice(data[i].price), yForPnl(data[i].pnl));
+        ctx.strokeStyle = avgPnl >= 0 ? '#22c55e' : '#ef4444';
+        ctx.stroke();
       }
-      ctx.strokeStyle = '#22d3ee';
-      ctx.lineWidth = 2 * dpr;
-      ctx.stroke();
 
       // Draw current ETH price marker
       let ethSpot = spotPrices.ETH;
