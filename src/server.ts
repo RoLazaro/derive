@@ -2,8 +2,10 @@ import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
 import WebSocket from 'ws';
 import { loadSettings, saveSettings, getSettingsPath, type AppSettings } from './config/settings.js';
+import { verifyPassword } from './utils/password.js';
 import { logger } from './utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,6 +20,45 @@ let wsPending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Err
 
 // Global stop state
 let globalStop = { armed: false, price: 0, triggered: false };
+
+// ─── Auth (password + session cookie) ───
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
+const COOKIE_NAME = 'derive_session';
+const sessions = new Map<string, number>(); // token -> expiry (ms)
+
+function parseCookies(req: IncomingMessage): Record<string, string> {
+  const header = req.headers.cookie || '';
+  const out: Record<string, string> = {};
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx > -1) out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return out;
+}
+
+function isAuthenticated(req: IncomingMessage): boolean {
+  const token = parseCookies(req)[COOKIE_NAME];
+  if (!token) return false;
+  const expiry = sessions.get(token);
+  if (!expiry) return false;
+  if (expiry < Date.now()) {
+    sessions.delete(token);
+    return false;
+  }
+  return true;
+}
+
+function requireAuth(req: IncomingMessage, res: ServerResponse): boolean {
+  if (isAuthenticated(req)) return true;
+  const wantsJson = (req.url || '').startsWith('/api/');
+  if (wantsJson) {
+    json(res, { error: 'Non authentifie' }, 401);
+  } else {
+    res.writeHead(302, { Location: '/login.html' });
+    res.end();
+  }
+  return false;
+}
 
 function serveFile(res: ServerResponse, filePath: string): void {
   const content = readFileSync(filePath);
@@ -445,6 +486,50 @@ export function startServer(port = 3001): void {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+    // ─── Auth routes (publiques) ───
+    if (url === '/api/auth-status' && req.method === 'GET') {
+      return json(res, { authenticated: isAuthenticated(req) });
+    }
+
+    if (url === '/api/login' && req.method === 'POST') {
+      try {
+        const data = JSON.parse(await readBody(req)) as { password?: string };
+        const settings = loadSettings();
+        if (!settings.authPasswordHash) {
+          return json(res, { error: 'Aucun mot de passe configure. Lancez: node dist/set-password.js <mot-de-passe>' }, 500);
+        }
+        if (!data.password || !verifyPassword(data.password, settings.authPasswordHash)) {
+          logger.warn('Login refused: mauvais mot de passe');
+          return json(res, { error: 'Mot de passe incorrect' }, 401);
+        }
+        const token = randomBytes(32).toString('hex');
+        sessions.set(token, Date.now() + SESSION_TTL_MS);
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Set-Cookie': `${COOKIE_NAME}=${token}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+        });
+        res.end(JSON.stringify({ success: true }));
+        logger.info('Login reussi');
+        return;
+      } catch (err) {
+        return json(res, { error: (err as Error).message }, 500);
+      }
+    }
+
+    if (url === '/api/logout' && req.method === 'POST') {
+      const token = parseCookies(req)[COOKIE_NAME];
+      if (token) sessions.delete(token);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Set-Cookie': `${COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0`,
+      });
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+
+    // ─── Auth gate : tout le reste (API + pages) est protege ───
+    if (url !== '/login.html' && !requireAuth(req, res)) return;
 
     if (url === '/api/settings' && req.method === 'GET') {
       const s = loadSettings();

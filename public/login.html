@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connexion - Derive Option Manager</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0e17;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-card {
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 380px;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+    }
+
+    .login-logo {
+      width: 56px; height: 56px;
+      background: linear-gradient(135deg, #22d3ee, #0ea5e9);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      margin-bottom: 20px;
+    }
+
+    .login-card h1 { font-size: 20px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
+    .login-card p { font-size: 13px; color: #64748b; margin-bottom: 28px; }
+
+    .form-group { margin-bottom: 20px; }
+    .form-group label {
+      display: block; font-size: 13px; font-weight: 500;
+      color: #94a3b8; margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%; padding: 12px 14px; background: #0f172a;
+      border: 1px solid #334155; border-radius: 8px; color: #e2e8f0;
+      font-size: 14px; font-family: 'SF Mono', 'Fira Code', monospace;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus { outline: none; border-color: #22d3ee; }
+
+    .btn-login {
+      width: 100%; padding: 12px; border: none; border-radius: 8px;
+      background: linear-gradient(135deg, #22d3ee, #0ea5e9);
+      color: #0f172a; font-size: 15px; font-weight: 700; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-login:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-login:disabled { opacity: 0.5; cursor: wait; transform: none; }
+
+    .error-msg {
+      display: none; padding: 10px 14px; border-radius: 8px; margin-bottom: 16px;
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5; font-size: 13px;
+    }
+    .error-msg.show { display: block; }
+
+    .hint { margin-top: 16px; font-size: 12px; color: #475569; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-logo">&#128184;</div>
+    <h1>Derive Option Manager</h1>
+    <p>Acces protege - entre ton mot de passe pour continuer.</p>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <form onsubmit="doLogin(event)">
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input type="password" id="password" placeholder="••••••••" autofocus autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-login" id="btnLogin">Se connecter</button>
+    </form>
+
+    <div class="hint">Session valide 30 jours sur cet appareil.</div>
+  </div>
+
+  <script>
+    async function doLogin(e) {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('btnLogin');
+      const err = document.getElementById('errorMsg');
+
+      if (!password) { showError('Entre ton mot de passe'); return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Connexion...';
+      err.classList.remove('show');
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          window.location.href = '/';
+        } else {
+          showError(data.error || 'Mot de passe incorrect');
+        }
+      } catch (ex) {
+        showError('Erreur de connexion au serveur');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Se connecter';
+      }
+    }
+
+    function showError(msg) {
+      const err = document.getElementById('errorMsg');
+      err.textContent = msg;
+      err.classList.add('show');
+    }
+
+    // Si deja connecte, aller direct au dashboard
+    fetch('/api/auth-status').then(r => r.json()).then(data => {
+      if (data.authenticated) window.location.href = '/';
+    }).catch(() => {});
+  </script>
+</body>
+</html>

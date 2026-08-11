@@ -413,6 +413,9 @@
         </svg>
         Reglages
       </button>
+      <button class="btn-settings" onclick="logout()" style="border-color:#374151;color:#9ca3af">
+        Deconnexion
+      </button>
     </div>
   </div>
 
@@ -555,9 +558,38 @@
     let currentNetwork = 'mainnet';
     let pollTimer = null;
 
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth-status');
+        const data = await res.json();
+        if (!data.authenticated) {
+          window.location.href = '/login.html';
+          return false;
+        }
+        return true;
+      } catch (err) {
+        window.location.href = '/login.html';
+        return false;
+      }
+    }
+
+    async function logout() {
+      try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
+      window.location.href = '/login.html';
+    }
+
+    async function apiFetch(url, options) {
+      const res = await fetch(url, options);
+      if (res.status === 401) {
+        window.location.href = '/login.html';
+        throw new Error('Non authentifie');
+      }
+      return res;
+    }
+
     async function loadSettings() {
       try {
-        const res = await fetch('/api/settings');
+        const res = await apiFetch('/api/settings');
         const data = await res.json();
         document.getElementById('sessionKey').value = data.sessionKey || '';
         document.getElementById('subaccountId').value = data.subaccountId || 0;
@@ -583,7 +615,7 @@
 
     async function fetchPositions() {
       try {
-        const res = await fetch('/api/positions');
+        const res = await apiFetch('/api/positions');
         const data = await res.json();
         renderPositions(data.positions || [], data.spotPrices || {});
       } catch (err) { console.error(err); }
@@ -697,7 +729,7 @@
         ? 'https://api-demo.lyra.finance' : 'https://api.lyra.finance';
 
       try {
-        const res = await fetch('/api/settings', {
+        const res = await apiFetch('/api/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionKey, sessionSecret, subaccountId, breakEvenOffsetPct, wsUrl, restUrl }),
@@ -733,7 +765,7 @@
 
     async function loadStopSettings() {
       try {
-        const res = await fetch('/api/stop');
+        const res = await apiFetch('/api/stop');
         const data = await res.json();
         if (data.price) {
           document.getElementById('globalStopPrice').value = data.price;
@@ -773,7 +805,7 @@
         // Desactiver
         stopArmed = false;
         updateStopUI(false);
-        await fetch('/api/stop', {
+        await apiFetch('/api/stop', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ armed: false }),
@@ -791,7 +823,7 @@
       stopArmed = true;
       updateStopUI(true, price);
 
-      const res = await fetch('/api/stop', {
+      const res = await apiFetch('/api/stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ armed: true, price }),
@@ -816,7 +848,7 @@
       btn.textContent = 'FERMETURE EN COURS...';
 
       try {
-        const res = await fetch('/api/emergency-close', { method: 'POST' });
+        const res = await apiFetch('/api/emergency-close', { method: 'POST' });
         const data = await res.json();
 
         if (data.success) {
@@ -837,10 +869,13 @@
     });
 
     // Init
-    loadSettings().then(() => {
-      startPolling();
-      loadStopSettings();
-      initPayoffChart();
+    checkAuth().then(ok => {
+      if (!ok) return;
+      loadSettings().then(() => {
+        startPolling();
+        loadStopSettings();
+        initPayoffChart();
+      });
     });
 
     // --- Payoff Chart ---

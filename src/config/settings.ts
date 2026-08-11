@@ -12,6 +12,7 @@ export interface AppSettings {
   breakEvenOffsetPct: number;
   pollIntervalMs: number;
   logLevel: string;
+  authPasswordHash: string;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -23,6 +24,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   breakEvenOffsetPct: 0.5,
   pollIntervalMs: 5000,
   logLevel: 'info',
+  authPasswordHash: '',
 };
 
 const SETTINGS_DIR = join(homedir(), '.derive-option-manager');
