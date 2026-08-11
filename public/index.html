@@ -885,49 +885,19 @@
     }
 
     function calculateMaxLoss(positions) {
-      let maxLoss = 0;
-      for (const pos of positions) {
-        const name = pos.instrument_name || '';
-        const parts = name.split('-');
-        const strike = parseFloat(parts[2] || '0');
-        const optType = parts[3] === 'P' ? 'put' : 'call';
-        const rawAmount = parseFloat(pos.amount || '0');
-        const isShort = rawAmount < 0;
-        const amount = Math.abs(rawAmount);
-        const entry = parseFloat(pos.average_price || '0');
-
-        if (isShort && optType === 'call') {
-          maxLoss += amount * (entry);
-        } else if (!isShort && optType === 'put') {
-          maxLoss += amount * entry;
-        } else if (isShort && optType === 'put') {
-          maxLoss += amount * (entry - strike);
-        }
-      }
-      return maxLoss;
+      if (positions.length === 0) return 0;
+      const highPrice = 100000;
+      const pnlLow = calculatePayoff(positions, 0);
+      const pnlHigh = calculatePayoff(positions, highPrice);
+      return Math.abs(Math.min(pnlLow, pnlHigh));
     }
 
     function calculateMaxProfit(positions) {
-      let maxProfit = 0;
-      for (const pos of positions) {
-        const name = pos.instrument_name || '';
-        const parts = name.split('-');
-        const strike = parseFloat(parts[2] || '0');
-        const optType = parts[3] === 'P' ? 'put' : 'call';
-        const rawAmount = parseFloat(pos.amount || '0');
-        const isShort = rawAmount < 0;
-        const amount = Math.abs(rawAmount);
-        const entry = parseFloat(pos.average_price || '0');
-
-        if (!isShort && optType === 'call') {
-          maxProfit += amount * (entry);
-        } else if (isShort && optType === 'put') {
-          maxProfit += amount * (strike - entry);
-        } else if (!isShort && optType === 'put') {
-          maxProfit += amount * (strike - entry);
-        }
-      }
-      return maxProfit;
+      if (positions.length === 0) return 0;
+      const highPrice = 100000;
+      const pnlLow = calculatePayoff(positions, 0);
+      const pnlHigh = calculatePayoff(positions, highPrice);
+      return Math.max(pnlLow, pnlHigh);
     }
 
     function findBreakEven(positions) {
